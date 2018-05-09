@@ -12,13 +12,16 @@ public:
     Wiznet5500lwIP (int8_t cs=SS): Wiznet5500(cs) { }
 
     // start with dhcp client
+    // default mac-address is inferred(+modified) from esp8266's STA one
     boolean begin (const uint8_t *macAddress = NULL, uint16_t mtu = 1500);
     
     // to be called regularly
     err_t loop ();
 
-    const netif* getNetIf () const { return &_netif; }
-    IPAddress    localIP  () const { return IPAddress(_netif.ip_addr.addr); }
+    const netif* getNetIf   () const { return &_netif; }
+    IPAddress    localIP    () const { return IPAddress(_netif.ip_addr.addr); }
+    IPAddress    subnetMask () const { return IPAddress(_netif.netmask.addr); }
+    IPAddress    gatewayIP  () const { return IPAddress(_netif.gw.addr); }
 
 protected:
 
