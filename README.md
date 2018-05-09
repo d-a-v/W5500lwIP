@@ -22,7 +22,7 @@ How to use
 * esp8266/arduino (with lwip2)
 * declare 'Wiznet5500lwIP ether(CSPIN)`
 * call `ether.begin()` in arduino's `setup()`
-* call `ether.loop() in arduino's `loop()`
+* call `ether.loop()` in arduino's `loop()`
 
 As for now, the network interface is working as DHCP client only
 
