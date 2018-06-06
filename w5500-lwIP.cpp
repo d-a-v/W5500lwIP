@@ -4,7 +4,7 @@
 #include <IPAddress.h>
 
 #include <lwip/netif.h>
-#include <lwip/etharp.h>
+#include <netif/etharp.h>
 #include <lwip/dhcp.h>
 
 #ifdef ESP8266
@@ -14,13 +14,13 @@
 
 #include "w5500-lwIP.h"
 
-boolean Wiznet5500lwIP::begin (const uint8_t* macAddress, uint16_t mtu)
+boolean Wiznet5500lwIP::begin(SPIClass &spi, const uint8_t* macAddress, uint16_t mtu)
 {
     uint8_t zeros[6] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     if (!macAddress)
         macAddress = zeros;
         
-    if (!Wiznet5500::begin(macAddress))
+    if (!Wiznet5500::begin(spi, macAddress))
         return false;
     _mtu = mtu;
 
@@ -36,6 +36,27 @@ boolean Wiznet5500lwIP::begin (const uint8_t* macAddress, uint16_t mtu)
         netif_remove(&_netif);
         return false;
     }
+}
+
+/**
+* @ingroup lwip_nosys
+* Forwards a received packet for input processing with
+* ethernet_input() or ip_input() depending on netif flags.
+* Don't call directly, pass to netif_add() and call
+* netif->input().
+* Only works if the netif driver correctly sets
+* NETIF_FLAG_ETHARP and/or NETIF_FLAG_ETHERNET flag!
+*/
+err_t
+netif_input(struct pbuf *p, struct netif *inp)
+{
+#if LWIP_ETHERNET
+  if (inp->flags & (NETIF_FLAG_ETHARP | NETIF_FLAG_ETHERNET)) {
+    return ethernet_input(p, inp);
+  }
+  else
+#endif /* LWIP_ETHERNET */
+    return ip_input(p, inp);
 }
 
 err_t Wiznet5500lwIP::start_with_dhclient ()

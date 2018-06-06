@@ -2,7 +2,7 @@
 #ifndef W5500LWIP_H
 #define W5500LWIP_H
 
-#include <w5500.h>
+#include "w5500.h"
 #include <lwip/netif.h>
 
 class Wiznet5500lwIP: public Wiznet5500 {
@@ -13,15 +13,15 @@ public:
 
     // start with dhcp client
     // default mac-address is inferred(+modified) from esp8266's STA one
-    boolean begin (const uint8_t *macAddress = NULL, uint16_t mtu = 1500);
+    boolean begin(SPIClass &spi, const uint8_t *macAddress = NULL, uint16_t mtu = 1500);
     
     // to be called regularly
     err_t loop ();
 
     const netif* getNetIf   () const { return &_netif; }
-    IPAddress    localIP    () const { return IPAddress(_netif.ip_addr.addr); }
-    IPAddress    subnetMask () const { return IPAddress(_netif.netmask.addr); }
-    IPAddress    gatewayIP  () const { return IPAddress(_netif.gw.addr); }
+    IPAddress    localIP    () const { return IPAddress(_netif.ip_addr.u_addr.ip4.addr); }
+    IPAddress    subnetMask () const { return IPAddress(_netif.netmask.u_addr.ip4.addr); }
+    IPAddress    gatewayIP  () const { return IPAddress(_netif.gw.u_addr.ip4.addr); }
 
 protected:
 
