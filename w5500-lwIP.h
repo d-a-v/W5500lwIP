@@ -20,8 +20,8 @@ public:
 
     const netif* getNetIf   () const { return &_netif; }
     IPAddress    localIP    () const { return IPAddress(ip4_addr_get_u32(&_netif.ip_addr)); }
-    IPAddress    subnetMask () const { return IPAddress(ip4_addr_get_u32(&_netif.netmask.addr)); }
-    IPAddress    gatewayIP  () const { return IPAddress(ip4_addr_get_u32(&_netif.gw.addr)); }
+    IPAddress    subnetMask () const { return IPAddress(ip4_addr_get_u32(&_netif.netmask)); }
+    IPAddress    gatewayIP  () const { return IPAddress(ip4_addr_get_u32(&_netif.gw)); }
 
 protected:
 
