@@ -70,7 +70,7 @@ err_t Wiznet5500lwIP::start_with_dhclient ()
     _netif.hwaddr_len = sizeof _mac_address;
     memcpy(_netif.hwaddr, _mac_address, sizeof _mac_address);
     
-    if (!netif_add(&_netif, &ip, &mask, &gw, this, netif_init_s, netif_input))
+    if (!netif_add(&_netif, &ip, &mask, &gw, this, netif_init_s, ethernet_input))// netif_input))
         return ERR_IF;
 
     _netif.flags |= NETIF_FLAG_UP;
@@ -82,17 +82,39 @@ err_t Wiznet5500lwIP::linkoutput_s (netif *netif, struct pbuf *pbuf)
 {
     Wiznet5500lwIP* ths = (Wiznet5500lwIP*)netif->state;
     
+    /*
     if (pbuf->len != pbuf->tot_len || pbuf->next)
         Serial.println("ERRTOT\r\n");
 
     uint16_t len = ths->sendFrame((const uint8_t*)pbuf->payload, pbuf->len);
+    */
+
+    struct pbuf *p = pbuf;
+
+    //if (p->len != p->tot_len)
+    //  Serial.printf("Chained : p->len=%d p->tot_len=%d\r\n", p->len, p->tot_len);
+
+    do 
+    {
+      uint16_t len = ths->sendFrame((const uint8_t*)p->payload, p->len);
+      if (len != p->len)
+      {
+        Serial.printf("SendFrame() : wrong buffer length p->len=%d, returned=%d\r\n", p->len, len);
+        //return ERR_MEM;
+      }
+
+      p = pbuf->next;
+    } while (p);
+    
+    return ERR_OK;
+
 
 #ifdef ESP8266
     if (phy_capture)
         phy_capture(ths->_netif.num, (const char*)pbuf->payload, pbuf->len, /*out*/1, /*success*/len == pbuf->len);
 #endif
     
-    return len == pbuf->len? ERR_OK: ERR_MEM;
+    //return len == pbuf->len? ERR_OK: ERR_MEM;
 }
 
 err_t Wiznet5500lwIP::netif_init_s (struct netif* netif)
@@ -137,12 +159,49 @@ err_t Wiznet5500lwIP::loop ()
     if (!tot_len)
         return ERR_OK;
     
-    pbuf* pbuf = pbuf_alloc(PBUF_RAW, tot_len, PBUF_POOL);
+    struct pbuf *pbuf = pbuf_alloc(PBUF_RAW, tot_len, PBUF_POOL);
     if (!pbuf)
     {
-        discardFrame(tot_len);
-        return ERR_BUF;
+      Serial.printf("pbuf_alloc() : Error tot_len=%d\r\n", tot_len);
+      discardFrame(tot_len);
+      return ERR_BUF;
     }
+
+    struct pbuf *p = pbuf;
+    uint16_t l = tot_len;
+
+    //if (p->len != p->tot_len)
+    //  Serial.printf("Chained : p->len=%d p->tot_len=%d\r\n", p->len, p->tot_len);
+
+    do 
+    {
+      uint16_t len = readFrameData((uint8_t*)p->payload, p->len);
+
+      if (len != p->len)
+      {
+        if (len > 0)
+          Serial.printf("readFrameData() : wrong buffer length p->len=%d, returned=%d\r\n", p->len, len);
+
+        discardFrame(tot_len);
+        pbuf_free(pbuf);
+
+        return ERR_BUF;
+      }
+
+      l = l - len;
+      p = p->next;
+    } while (p && l > 0);
+    
+    err_t err = _netif.input(pbuf, &_netif);
+
+    if (err != ERR_OK)
+      pbuf_free(pbuf);
+
+    return err;
+
+
+
+    /*
     if (pbuf->next || pbuf->tot_len != pbuf->len)
     {
         Serial.println("CHAINED?\r\n");
@@ -167,11 +226,13 @@ err_t Wiznet5500lwIP::loop ()
 
 #ifdef ESP8266
     if (phy_capture)
-        phy_capture(_netif.num, (const char*)pbuf->payload, tot_len, /*out*/0, /*success*/err == ERR_OK);
+        phy_capture(_netif.num, (const char*)pbuf->payload, tot_len, 0, err == ERR_OK);
 #endif
 
     if (err != ERR_OK)
         pbuf_free(pbuf);
 
     return err;
+
+    */
 }
