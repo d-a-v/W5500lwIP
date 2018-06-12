@@ -2,8 +2,16 @@
 #ifndef W5500LWIP_H
 #define W5500LWIP_H
 
-#include <w5500.h>
 #include <lwip/netif.h>
+#include "w5500.h"
+
+#ifdef ESP32
+#include <SPI.h>
+#define SPIparam(x...) x
+#else
+#define SPIparam(x...)
+#endif
+
 
 class Wiznet5500lwIP: public Wiznet5500 {
 
@@ -13,7 +21,7 @@ public:
 
     // start with dhcp client
     // default mac-address is inferred(+modified) from esp8266's STA one
-    boolean begin (const uint8_t *macAddress = NULL, uint16_t mtu = 1500);
+    boolean begin (SPIparam(SPIClass& spi,) const uint8_t *macAddress = NULL, uint16_t mtu = 1500);
     
     // to be called regularly
     err_t loop ();

@@ -10,18 +10,18 @@
 #include <lwip/dhcp.h>
 
 #ifdef ESP8266
-#include <user_interface.h>
+#include <user_interface.h>	// wifi_get_macaddr()
 #endif
 
 #include "w5500-lwIP.h"
 
-boolean Wiznet5500lwIP::begin (const uint8_t* macAddress, uint16_t mtu)
+boolean Wiznet5500lwIP::begin (SPIparam(SPIClass& spi,) const uint8_t* macAddress, uint16_t mtu)
 {
     uint8_t zeros[6] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     if (!macAddress)
         macAddress = zeros;
         
-    if (!Wiznet5500::begin(macAddress))
+    if (!Wiznet5500::begin(SPIparam(spi,) macAddress))
         return false;
     _mtu = mtu;
 
