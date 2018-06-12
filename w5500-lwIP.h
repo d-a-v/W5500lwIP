@@ -19,9 +19,9 @@ public:
     err_t loop ();
 
     const netif* getNetIf   () const { return &_netif; }
-    IPAddress    localIP    () const { return IPAddress(_netif.ip_addr.addr); }
-    IPAddress    subnetMask () const { return IPAddress(_netif.netmask.addr); }
-    IPAddress    gatewayIP  () const { return IPAddress(_netif.gw.addr); }
+    IPAddress    localIP    () const { return IPAddress(ip4_addr_get_u32(&_netif.ip_addr)); }
+    IPAddress    subnetMask () const { return IPAddress(ip4_addr_get_u32(&_netif.netmask.addr)); }
+    IPAddress    gatewayIP  () const { return IPAddress(ip4_addr_get_u32(&_netif.gw.addr)); }
 
 protected:
 

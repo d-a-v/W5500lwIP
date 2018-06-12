@@ -1,5 +1,7 @@
 
-// TODO: remove all Serial.print
+// TODO:
+// remove all Serial.print
+// unchain pbufs
 
 #include <IPAddress.h>
 
@@ -8,7 +10,6 @@
 #include <lwip/dhcp.h>
 
 #ifdef ESP8266
-#include <NetDump.h>
 #include <user_interface.h>
 #endif
 
@@ -61,12 +62,14 @@ err_t Wiznet5500lwIP::linkoutput_s (netif *netif, struct pbuf *pbuf)
 {
     Wiznet5500lwIP* ths = (Wiznet5500lwIP*)netif->state;
     
+#ifdef ESP8266
     if (pbuf->len != pbuf->tot_len || pbuf->next)
         Serial.println("ERRTOT\r\n");
+#endif
 
     uint16_t len = ths->sendFrame((const uint8_t*)pbuf->payload, pbuf->len);
 
-#ifdef ESP8266
+#if defined(ESP8266) && PHY_HAS_CAPTURE
     if (phy_capture)
         phy_capture(ths->_netif.num, (const char*)pbuf->payload, pbuf->len, /*out*/1, /*success*/len == pbuf->len);
 #endif
@@ -85,13 +88,24 @@ err_t Wiznet5500lwIP::netif_init ()
     if (memcmp(_mac_address, zeros, 6) == 0)
     {
 #ifdef ESP8266
-        if (!wifi_get_macaddr(STATION_IF, (uint8*)zeros))
-            Serial.println("can u see me?");
-        // I understand this is cheating
-#endif
+
+        // make a new mac-address from the esp's wifi sta one
+        // I understand this is cheating with an official mac-address
+        wifi_get_macaddr(STATION_IF, (uint8*)zeros);
         zeros[3] += _netif.num;
         memcpy(_mac_address, zeros, 6);
         memcpy(_netif.hwaddr, zeros, 6);
+
+#else
+
+        // https://serverfault.com/questions/40712/what-range-of-mac-addresses-can-i-safely-use-for-my-virtual-machines
+        // TODO some random salt should be added here
+        zeros[0] = 0xEE;
+        zeros[3] = _netif.num;
+        memcpy(_mac_address, zeros, 6);
+        memcpy(_netif.hwaddr, zeros, 6);
+
+#endif
     }
 
     _netif.name[0] = 'e';
@@ -116,41 +130,45 @@ err_t Wiznet5500lwIP::loop ()
     if (!tot_len)
         return ERR_OK;
     
-    pbuf* pbuf = pbuf_alloc(PBUF_RAW, tot_len, PBUF_POOL);
-    if (!pbuf)
+    // from doc: use PBUF_RAM for TX, PBUF_POOL from RX
+    // however:
+    // PBUF_POOL can return chained pbuf (not in one piece)
+    // and WiznetDriver does not have the proper API to deal with that
+    // so in the meantime, we use PBUF_RAM instead which are currently
+    // guarantying to deliver a continuous chunk of memory.
+    // TODO: tweak the wiznet driver to allow copying partial chunk
+    //       of received data and use PBUF_POOL.
+    pbuf* pbuf = pbuf_alloc(PBUF_RAW, tot_len, PBUF_RAM);
+    if (!pbuf || pbuf->len < tot_len)
     {
-        discardFrame(tot_len);
-        return ERR_BUF;
-    }
-    if (pbuf->next || pbuf->tot_len != pbuf->len)
-    {
-        Serial.println("CHAINED?\r\n");
         discardFrame(tot_len);
         return ERR_BUF;
     }
 
     uint16_t len = readFrameData((uint8_t*)pbuf->payload, tot_len);
-    if (!len)
+    if (len != tot_len)
     {
+        // tot_len is given by readFrameSize()
+        // and is supposed to be honoured by readFrameData()
+        // todo: ensure this test is unneeded, remove the print
         Serial.println("read error?\r\n");
-        return ERR_BUF;
-    }
-
-    if (pbuf->len != tot_len)
-    {
-        Serial.println("pbuf too large?\r\n");
-        pbuf->len = tot_len;
+        pbuf_free(pbuf);
+        return ERR_MEM;
     }
 
     err_t err = _netif.input(pbuf, &_netif);
 
-#ifdef ESP8266
+#if defined(ESP8266) && PHY_HAS_CAPTURE
     if (phy_capture)
         phy_capture(_netif.num, (const char*)pbuf->payload, tot_len, /*out*/0, /*success*/err == ERR_OK);
 #endif
 
     if (err != ERR_OK)
+    {
         pbuf_free(pbuf);
+	return err;
+    }
 
-    return err;
+    // allocated pbuf is now caller's responsibility
+    return ERR_OK;
 }
