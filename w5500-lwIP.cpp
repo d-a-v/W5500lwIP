@@ -92,20 +92,18 @@ err_t Wiznet5500lwIP::netif_init ()
         // make a new mac-address from the esp's wifi sta one
         // I understand this is cheating with an official mac-address
         wifi_get_macaddr(STATION_IF, (uint8*)zeros);
-        zeros[3] += _netif.num;
-        memcpy(_mac_address, zeros, 6);
-        memcpy(_netif.hwaddr, zeros, 6);
 
 #else
 
         // https://serverfault.com/questions/40712/what-range-of-mac-addresses-can-i-safely-use-for-my-virtual-machines
-        // TODO some random salt should be added here
+        // TODO api to get a mac-address from user
+        // TODO ESP32: get wifi mac address like with esp8266 above
         zeros[0] = 0xEE;
-        zeros[3] = _netif.num;
-        memcpy(_mac_address, zeros, 6);
-        memcpy(_netif.hwaddr, zeros, 6);
 
 #endif
+        zeros[3] += _netif.num;
+        memcpy(_mac_address, zeros, 6);
+        memcpy(_netif.hwaddr, zeros, 6);
     }
 
     _netif.name[0] = 'e';
@@ -118,7 +116,13 @@ err_t Wiznet5500lwIP::netif_init ()
         | NETIF_FLAG_BROADCAST 
         | NETIF_FLAG_LINK_UP;
 
+    // lwIP's doc: This function typically first resolves the hardware
+    // address, then sends the packet.  For ethernet physical layer, this is
+    // usually lwIP's etharp_output()
     _netif.output = etharp_output;
+    
+    // lwIP's doc: This function outputs the pbuf as-is on the link medium
+    // (this must points to the raw ethernet driver, meaning: us)
     _netif.linkoutput = linkoutput_s;
     
     return ERR_OK;
@@ -141,6 +145,8 @@ err_t Wiznet5500lwIP::loop ()
     pbuf* pbuf = pbuf_alloc(PBUF_RAW, tot_len, PBUF_RAM);
     if (!pbuf || pbuf->len < tot_len)
     {
+        if (pbuf)
+            pbuf_free(pbuf);
         discardFrame(tot_len);
         return ERR_BUF;
     }
@@ -153,7 +159,7 @@ err_t Wiznet5500lwIP::loop ()
         // todo: ensure this test is unneeded, remove the print
         Serial.println("read error?\r\n");
         pbuf_free(pbuf);
-        return ERR_MEM;
+        return ERR_BUF;
     }
 
     err_t err = _netif.input(pbuf, &_netif);
@@ -166,7 +172,7 @@ err_t Wiznet5500lwIP::loop ()
     if (err != ERR_OK)
     {
         pbuf_free(pbuf);
-	return err;
+        return err;
     }
 
     // allocated pbuf is now caller's responsibility
