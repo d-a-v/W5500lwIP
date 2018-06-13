@@ -50,7 +50,7 @@ err_t Wiznet5500lwIP::start_with_dhclient ()
     _netif.hwaddr_len = sizeof _mac_address;
     memcpy(_netif.hwaddr, _mac_address, sizeof _mac_address);
     
-    if (!netif_add(&_netif, &ip, &mask, &gw, this, netif_init_s, netif_input))
+    if (!netif_add(&_netif, &ip, &mask, &gw, this, netif_init_s, ethernet_input))
         return ERR_IF;
 
     _netif.flags |= NETIF_FLAG_UP;
@@ -174,7 +174,7 @@ err_t Wiznet5500lwIP::loop ()
         pbuf_free(pbuf);
         return err;
     }
+    // (else) allocated pbuf is now on lwIP's responsibility
 
-    // allocated pbuf is now caller's responsibility
     return ERR_OK;
 }

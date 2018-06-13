@@ -2,6 +2,7 @@
 #ifndef W5500LWIP_H
 #define W5500LWIP_H
 
+#include <lwip/init.h>
 #include <lwip/netif.h>
 #include "w5500.h"
 
@@ -27,9 +28,16 @@ public:
     err_t loop ();
 
     const netif* getNetIf   () const { return &_netif; }
+
+#if LWIP_VERSION_MAJOR == 1
+    IPAddress    localIP    () const { return IPAddress(_netif.ip_addr.u_addr.ip4.addr); }
+    IPAddress    subnetMask () const { return IPAddress(_netif.netmask.u_addr.ip4.addr); }
+    IPAddress    gatewayIP  () const { return IPAddress(_netif.gw.u_addr.ip4.addr); }
+#else
     IPAddress    localIP    () const { return IPAddress(ip4_addr_get_u32(&_netif.ip_addr)); }
     IPAddress    subnetMask () const { return IPAddress(ip4_addr_get_u32(&_netif.netmask)); }
     IPAddress    gatewayIP  () const { return IPAddress(ip4_addr_get_u32(&_netif.gw)); }
+#endif
 
 protected:
 
