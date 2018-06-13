@@ -96,7 +96,6 @@ err_t Wiznet5500lwIP::netif_init ()
 #else
 
         // https://serverfault.com/questions/40712/what-range-of-mac-addresses-can-i-safely-use-for-my-virtual-machines
-        // TODO api to get a mac-address from user
         // TODO ESP32: get wifi mac address like with esp8266 above
         zeros[0] = 0xEE;
 
