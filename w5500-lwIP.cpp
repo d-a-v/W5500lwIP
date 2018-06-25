@@ -82,6 +82,12 @@ err_t Wiznet5500lwIP::netif_init_s (struct netif* netif)
     return ((Wiznet5500lwIP*)netif->state)->netif_init();
 }
 
+void Wiznet5500lwIP::netif_status_callback_s (struct netif* netif)
+{
+    ((Wiznet5500lwIP*)netif->state)->netif_status_callback();
+}
+
+
 err_t Wiznet5500lwIP::netif_init ()
 {
     uint8_t zeros[6] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
@@ -124,7 +130,17 @@ err_t Wiznet5500lwIP::netif_init ()
     // (this must points to the raw ethernet driver, meaning: us)
     _netif.linkoutput = linkoutput_s;
     
+    _netif.status_callback = netif_status_callback_s;
+
     return ERR_OK;
+}
+
+void Wiznet5500lwIP::netif_status_callback ()
+{
+    if (_default && connected())
+        netif_set_default(&_netif);
+    else if (netif_default == &_netif && !connected())
+        netif_set_default(nullptr);
 }
 
 err_t Wiznet5500lwIP::loop ()
@@ -137,7 +153,7 @@ err_t Wiznet5500lwIP::loop ()
     // however:
     // PBUF_POOL can return chained pbuf (not in one piece)
     // and WiznetDriver does not have the proper API to deal with that
-    // so in the meantime, we use PBUF_RAM instead which are currently
+    // so in the meantime, we use PBUF_RAM instead which is currently
     // guarantying to deliver a continuous chunk of memory.
     // TODO: tweak the wiznet driver to allow copying partial chunk
     //       of received data and use PBUF_POOL.
@@ -176,4 +192,11 @@ err_t Wiznet5500lwIP::loop ()
     // (else) allocated pbuf is now on lwIP's responsibility
 
     return ERR_OK;
+}
+
+void Wiznet5500lwIP::setDefault ()
+{
+    _default = true;
+    if (connected())
+        netif_set_default(&_netif);
 }
