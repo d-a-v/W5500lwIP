@@ -1,8 +1,3 @@
-
-// TODO:
-// remove all Serial.print
-// unchain pbufs
-
 #include <IPAddress.h>
 
 #include <lwip/netif.h>
@@ -15,11 +10,114 @@
 
 #include "w5500-lwIP.h"
 
+template< class T > Wiznet5500lwIPQueue<T>::Wiznet5500lwIPQueue(int x) :
+  size(x),//ctor
+  values(new T[size]),
+  front(0),
+  back(0)
+{
+  m = xSemaphoreCreateMutex();
+}
+
+template< class T > bool Wiznet5500lwIPQueue<T>::isFull()
+{
+  if ((back + 1) % size == front)
+    return 1;
+  else
+    return 0;
+}
+
+template< class T > bool Wiznet5500lwIPQueue<T>::enQueue(T x)
+{
+  bool b = 0;
+
+  xSemaphoreTake(m, portMAX_DELAY);
+
+  if (!Wiznet5500lwIPQueue<T>::isFull())
+  {
+    values[back] = x;
+    back = (back + 1) % size;
+    b = 1;
+  }
+
+  xSemaphoreGive(m);
+
+  return b;
+}
+
+template< class T > bool Wiznet5500lwIPQueue<T>::isEmpty()
+{
+  if (back == front)//is empty
+    return 1;
+  else
+    return 0; //is not empty
+}
+
+template< class T > T Wiznet5500lwIPQueue<T>::deQueue()
+{
+  T val = NULL;
+
+  xSemaphoreTake(m, portMAX_DELAY);
+
+  if (!Wiznet5500lwIPQueue<T>::isEmpty())
+  {
+    val = values[front];
+    front = (front + 1) % size;
+  }
+  else
+  {
+    // Queue is empty
+  }
+
+  xSemaphoreGive(m);
+
+  return val;
+
+}
+
+static void _startThread(void *ctx)
+{
+  while (42)
+  {
+    ((Wiznet5500lwIP*)ctx)->loop();
+    //delay(1);
+  }
+}
+
+static void _tcpcallback(void *ctx)
+{
+  Wiznet5500lwIP* ths = (Wiznet5500lwIP*)ctx;
+  ths->lwiptcpip_callback();
+}
+
+
+template class Wiznet5500lwIPQueue<struct pbuf*>;
+static SemaphoreHandle_t _W5500SPIMutex = xSemaphoreCreateMutex();
+
+
+void Wiznet5500lwIP::lwiptcpip_callback()
+{
+  pbuf* p = _pbufqueue.deQueue();
+  if (p == NULL)
+    return;
+
+  err_t err = _netif.input(p, &_netif);
+
+  if (err != ERR_OK)
+  {
+    ESP_LOGW("w5500-lwip", "_netif.input (ret=%d)", err);
+    pbuf_free(p);
+    return;
+  }
+}
+
 boolean Wiznet5500lwIP::begin (SPIparam(SPIClass& spi,) const uint8_t* macAddress, uint16_t mtu)
 {
     uint8_t zeros[6] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     if (!macAddress)
         macAddress = zeros;
+
+    ESP_LOGI("w5500-lwip", "NO_SYS=%d", NO_SYS);
         
     if (!Wiznet5500::begin(SPIparam(spi,) macAddress))
         return false;
@@ -28,6 +126,14 @@ boolean Wiznet5500lwIP::begin (SPIparam(SPIClass& spi,) const uint8_t* macAddres
     switch (start_with_dhclient())
     {
     case ERR_OK:
+      xTaskCreatePinnedToCore(
+        _startThread,   // Function to implement the task
+        "w5500-lwip",   // Name of the task
+        10000,          // Stack size in words
+        this,           // Task input parameter
+        2,              // Priority of the task (higher priority task cause crash. I dont know why :/)
+        NULL,           // Task handle.
+        0);             // Core where the task should run
         return true;
 
     case ERR_IF:
@@ -49,6 +155,8 @@ err_t Wiznet5500lwIP::start_with_dhclient ()
     
     _netif.hwaddr_len = sizeof _mac_address;
     memcpy(_netif.hwaddr, _mac_address, sizeof _mac_address);
+
+    _callbackmsg = tcpip_callbackmsg_new(_tcpcallback, this);
     
     if (!netif_add(&_netif, &ip, &mask, &gw, this, netif_init_s, ethernet_input))
         return ERR_IF;
@@ -64,10 +172,12 @@ err_t Wiznet5500lwIP::linkoutput_s (netif *netif, struct pbuf *pbuf)
     
 #ifdef ESP8266
     if (pbuf->len != pbuf->tot_len || pbuf->next)
-        Serial.println("ERRTOT\r\n");
+      ESP_LOGW("w5500-lwip", "Err tot_len ?");
 #endif
 
+    xSemaphoreTake(_W5500SPIMutex, portMAX_DELAY);
     uint16_t len = ths->sendFrame((const uint8_t*)pbuf->payload, pbuf->len);
+    xSemaphoreGive(_W5500SPIMutex);
 
 #if defined(ESP8266) && PHY_HAS_CAPTURE
     if (phy_capture)
@@ -109,7 +219,7 @@ err_t Wiznet5500lwIP::netif_init ()
     _netif.name[0] = 'e';
     _netif.name[1] = '0' + _netif.num;
     _netif.mtu = _mtu;
-    _netif.chksum_flags = NETIF_CHECKSUM_ENABLE_ALL;
+    //_netif.chksum_flags = NETIF_CHECKSUM_ENABLE_ALL;
     _netif.flags = 
           NETIF_FLAG_ETHARP
         | NETIF_FLAG_IGMP
@@ -130,51 +240,46 @@ err_t Wiznet5500lwIP::netif_init ()
 
 err_t Wiznet5500lwIP::loop ()
 {
-    uint16_t tot_len = readFrameSize();
-    if (!tot_len)
-        return ERR_OK;
-    
-    // from doc: use PBUF_RAM for TX, PBUF_POOL from RX
-    // however:
-    // PBUF_POOL can return chained pbuf (not in one piece)
-    // and WiznetDriver does not have the proper API to deal with that
-    // so in the meantime, we use PBUF_RAM instead which are currently
-    // guarantying to deliver a continuous chunk of memory.
-    // TODO: tweak the wiznet driver to allow copying partial chunk
-    //       of received data and use PBUF_POOL.
-    pbuf* pbuf = pbuf_alloc(PBUF_RAW, tot_len, PBUF_RAM);
-    if (!pbuf || pbuf->len < tot_len)
-    {
-        if (pbuf)
-            pbuf_free(pbuf);
-        discardFrame(tot_len);
-        return ERR_BUF;
-    }
+  tcpip_trycallback(_callbackmsg);
 
-    uint16_t len = readFrameData((uint8_t*)pbuf->payload, tot_len);
-    if (len != tot_len)
-    {
-        // tot_len is given by readFrameSize()
-        // and is supposed to be honoured by readFrameData()
-        // todo: ensure this test is unneeded, remove the print
-        Serial.println("read error?\r\n");
-        pbuf_free(pbuf);
-        return ERR_BUF;
-    }
-
-    err_t err = _netif.input(pbuf, &_netif);
-
-#if defined(ESP8266) && PHY_HAS_CAPTURE
-    if (phy_capture)
-        phy_capture(_netif.num, (const char*)pbuf->payload, tot_len, /*out*/0, /*success*/err == ERR_OK);
-#endif
-
-    if (err != ERR_OK)
-    {
-        pbuf_free(pbuf);
-        return err;
-    }
-
-    // allocated pbuf is now caller's responsibility
+  xSemaphoreTake(_W5500SPIMutex, portMAX_DELAY);
+  uint16_t eth_data_count = readFrameSize();
+  xSemaphoreGive(_W5500SPIMutex);
+  if (!eth_data_count)
     return ERR_OK;
+
+  /* Allocate pbuf from pool (avoid using heap in interrupts) */
+  struct pbuf* p = pbuf_alloc(PBUF_RAW, eth_data_count, PBUF_POOL);
+  if (!p || p->len < eth_data_count)
+  {
+    ESP_LOGW("w5500-lwip", "pbuf_alloc (pbuf=%p, len=%d)", p, (p) ? p->len : 0);
+
+    if (p) pbuf_free(p);
+    //discardFrame(eth_data_count);
+    return ERR_BUF;
+  }
+
+  /* Copy ethernet frame into pbuf */
+  xSemaphoreTake(_W5500SPIMutex, portMAX_DELAY);
+  uint16_t len = readFrameData((uint8_t*)p->payload, eth_data_count);
+  xSemaphoreGive(_W5500SPIMutex);
+  if (len != eth_data_count)
+  {
+    // eth_data_count is given by readFrameSize()
+    // and is supposed to be honoured by readFrameData()
+    // todo: ensure this test is unneeded, remove the print
+    //ESP_LOGW("w5500-lwip", "readFrameData (tot_len=%d, len=%d)", eth_data_count, len);
+    pbuf_free(p);
+    return ERR_BUF;
+  }
+
+  /* Put in a queue which is processed in lwip thread loop */
+  if (!_pbufqueue.enQueue(p)) {
+    /* queue is full -> packet loss */
+    ESP_LOGW("w5500-lwip", "pbuf queue is full. Discard pbuf");
+    pbuf_free(p);
+    return ERR_BUF;
+  }
+
+  return ERR_OK;
 }
