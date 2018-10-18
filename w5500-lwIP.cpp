@@ -3,11 +3,12 @@
 // remove all Serial.print
 // unchain pbufs
 
-#include <IPAddress.h>
-
+#include <netif/ethernet.h>
 #include <lwip/netif.h>
 #include <lwip/etharp.h>
 #include <lwip/dhcp.h>
+
+#include <IPAddress.h>
 
 #ifdef ESP8266
 #include <user_interface.h>	// wifi_get_macaddr()
