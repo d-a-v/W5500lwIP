@@ -125,9 +125,7 @@ boolean LwipEthernet<RawEthernet>::begin (const uint8_t* macAddress, uint16_t mt
 
     if (_intrPin >= 0)
         attachInterrupt(_intrPin, [&]() { this->handlePackets(); }, FALLING);
-    else if (!schedule_function_us([&]() { this->handlePackets(); return true; },
-                                   1000,
-                                   SCHEDULED_FUNCTION_WITHOUT_YIELDELAYCALLS))
+    else if (!schedule_recurrent_function_us([&]() { this->handlePackets(); return true; }, 100))
     {
         netif_remove(&_netif);
         return false;
