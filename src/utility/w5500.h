@@ -106,7 +106,6 @@ protected:
      */
     uint16_t readFrameData(uint8_t *frame, uint16_t framesize);
 
-    uint8_t _mac_address[6];
 
 private:
 
@@ -132,6 +131,7 @@ private:
 
     SPIClass& _spi;
     int8_t _cs;
+    uint8_t _mac_address[6];
 
     /**
      * Default function to select chip.

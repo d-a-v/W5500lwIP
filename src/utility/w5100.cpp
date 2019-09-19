@@ -31,149 +31,162 @@
  */
 
 #include <SPI.h>
-#include "w5500.h"
+#include "w5100.h"
 
 
-uint8_t Wiznet5500::wizchip_read(uint8_t block, uint16_t address)
+uint8_t Wiznet5100::wizchip_read(uint16_t address)
 {
     uint8_t ret;
 
     wizchip_cs_select();
-
-    block |= AccessModeRead;
-
-    wizchip_spi_write_byte((address & 0xFF00) >> 8);
-    wizchip_spi_write_byte((address & 0x00FF) >> 0);
-    wizchip_spi_write_byte(block);
-
-    ret = wizchip_spi_read_byte();
-
+    _spi.transfer(0x0F);
+    _spi.transfer((address & 0xFF00) >>  8);
+    _spi.transfer((address & 0x00FF) >>  0);
+    ret = _spi.transfer(0);
     wizchip_cs_deselect();
+
     return ret;
 }
 
-uint16_t Wiznet5500::wizchip_read_word(uint8_t block, uint16_t address)
+uint16_t Wiznet5100::wizchip_read_word(uint16_t address)
 {
-    return ((uint16_t)wizchip_read(block, address) << 8) + wizchip_read(block, address + 1);
+    return ((uint16_t)wizchip_read(address) << 8) + wizchip_read(address + 1);
 }
 
-void Wiznet5500::wizchip_read_buf(uint8_t block, uint16_t address, uint8_t* pBuf, uint16_t len)
+
+void Wiznet5100::wizchip_read_buf(uint16_t address, uint8_t* pBuf, uint16_t len)
 {
-    uint16_t i;
+    for(uint16_t i = 0; i < len; i++)
+    {
+        pBuf[i] = wizchip_read(address + i);
+    }
+}
 
+void Wiznet5100::wizchip_write(uint16_t address, uint8_t wb)
+{
     wizchip_cs_select();
-
-    block |= AccessModeRead;
-
-    wizchip_spi_write_byte((address & 0xFF00) >> 8);
-    wizchip_spi_write_byte((address & 0x00FF) >> 0);
-    wizchip_spi_write_byte(block);
-    for(i = 0; i < len; i++)
-        pBuf[i] = wizchip_spi_read_byte();
-
+    _spi.transfer(0xF0);
+    _spi.transfer((address & 0xFF00) >>  8);
+    _spi.transfer((address & 0x00FF) >>  0);
+    _spi.transfer(wb);    // Data write (write 1byte data)
     wizchip_cs_deselect();
 }
 
-void Wiznet5500::wizchip_write(uint8_t block, uint16_t address, uint8_t wb)
+void Wiznet5100::wizchip_write_word(uint16_t address, uint16_t word)
 {
-    wizchip_cs_select();
-
-    block |= AccessModeWrite;
-
-    wizchip_spi_write_byte((address & 0xFF00) >> 8);
-    wizchip_spi_write_byte((address & 0x00FF) >> 0);
-    wizchip_spi_write_byte(block);
-    wizchip_spi_write_byte(wb);
-
-    wizchip_cs_deselect();
+    wizchip_write(address,   (uint8_t)(word>>8));
+    wizchip_write(address+1, (uint8_t) word);
 }
 
-void Wiznet5500::wizchip_write_word(uint8_t block, uint16_t address, uint16_t word)
+void Wiznet5100::wizchip_write_buf(uint16_t address, const uint8_t* pBuf, uint16_t len)
 {
-    wizchip_write(block, address,   (uint8_t)(word>>8));
-    wizchip_write(block, address+1, (uint8_t) word);
+    for(uint16_t i = 0; i < len; i++)
+    {
+        wizchip_write(address + i, pBuf[i]);
+    }
 }
 
-void Wiznet5500::wizchip_write_buf(uint8_t block, uint16_t address, const uint8_t* pBuf, uint16_t len)
-{
-    uint16_t i;
-
-    wizchip_cs_select();
-
-    block |= AccessModeWrite;
-
-    wizchip_spi_write_byte((address & 0xFF00) >> 8);
-    wizchip_spi_write_byte((address & 0x00FF) >> 0);
-    wizchip_spi_write_byte(block);
-    for(i = 0; i < len; i++)
-        wizchip_spi_write_byte(pBuf[i]);
-
-    wizchip_cs_deselect();
-}
-
-void Wiznet5500::setSn_CR(uint8_t cr) {
+void Wiznet5100::setSn_CR(uint8_t cr) {
     // Write the command to the Command Register
-    wizchip_write(BlockSelectSReg, Sn_CR, cr);
+    wizchip_write(Sn_CR, cr);
 
     // Now wait for the command to complete
-    while( wizchip_read(BlockSelectSReg, Sn_CR) );
+    while( wizchip_read(Sn_CR) );
 }
 
-uint16_t Wiznet5500::getSn_TX_FSR()
+uint16_t Wiznet5100::getSn_TX_FSR()
 {
     uint16_t val=0,val1=0;
     do
     {
-        val1 = wizchip_read_word(BlockSelectSReg, Sn_TX_FSR);
+        val1 = wizchip_read_word(Sn_TX_FSR);
         if (val1 != 0)
         {
-            val = wizchip_read_word(BlockSelectSReg, Sn_TX_FSR);
+            val = wizchip_read_word(Sn_TX_FSR);
         }
     } while (val != val1);
     return val;
 }
 
 
-uint16_t Wiznet5500::getSn_RX_RSR()
+uint16_t Wiznet5100::getSn_RX_RSR()
 {
     uint16_t val=0,val1=0;
     do
     {
-        val1 = wizchip_read_word(BlockSelectSReg, Sn_RX_RSR);
+        val1 = wizchip_read_word(Sn_RX_RSR);
         if (val1 != 0)
         {
-            val = wizchip_read_word(BlockSelectSReg, Sn_RX_RSR);
+            val = wizchip_read_word(Sn_RX_RSR);
         }
     } while (val != val1);
     return val;
 }
 
-void Wiznet5500::wizchip_send_data(const uint8_t *wizdata, uint16_t len)
+void Wiznet5100::wizchip_send_data(const uint8_t *wizdata, uint16_t len)
 {
-    uint16_t ptr = 0;
+    uint16_t ptr;
+    uint16_t size;
+    uint16_t dst_mask;
+    uint16_t dst_ptr;
 
-    if(len == 0) return;
     ptr = getSn_TX_WR();
-    wizchip_write_buf(BlockSelectTxBuf, ptr, wizdata, len);
+
+    dst_mask = ptr & TxBufferMask;
+    dst_ptr = TxBufferAddress + dst_mask;
+
+    if (dst_mask + len > TxBufferLength)
+    {
+        size = TxBufferLength - dst_mask;
+        wizchip_write_buf(dst_ptr, wizdata, size);
+        wizdata += size;
+        size = len - size;
+        dst_ptr = TxBufferAddress;
+        wizchip_write_buf(dst_ptr, wizdata, size);
+    }
+    else
+    {
+        wizchip_write_buf(dst_ptr, wizdata, len);
+    }
 
     ptr += len;
 
     setSn_TX_WR(ptr);
 }
 
-void Wiznet5500::wizchip_recv_data(uint8_t *wizdata, uint16_t len)
+void Wiznet5100::wizchip_recv_data(uint8_t *wizdata, uint16_t len)
 {
     uint16_t ptr;
+    uint16_t size;
+    uint16_t src_mask;
+    uint16_t src_ptr;
 
-    if(len == 0) return;
     ptr = getSn_RX_RD();
-    wizchip_read_buf(BlockSelectRxBuf, ptr, wizdata, len);
+
+    src_mask = ptr & RxBufferMask;
+    src_ptr = RxBufferAddress + src_mask;
+
+
+    if( (src_mask + len) > RxBufferLength )
+    {
+        size = RxBufferLength - src_mask;
+        wizchip_read_buf(src_ptr, wizdata, size);
+        wizdata += size;
+        size = len - size;
+        src_ptr = RxBufferAddress;
+        wizchip_read_buf(src_ptr, wizdata, size);
+    }
+    else
+    {
+        wizchip_read_buf(src_ptr, wizdata, len);
+    }
+
     ptr += len;
 
     setSn_RX_RD(ptr);
 }
 
-void Wiznet5500::wizchip_recv_ignore(uint16_t len)
+void Wiznet5100::wizchip_recv_ignore(uint16_t len)
 {
     uint16_t ptr;
 
@@ -182,7 +195,7 @@ void Wiznet5500::wizchip_recv_ignore(uint16_t len)
     setSn_RX_RD(ptr);
 }
 
-void Wiznet5500::wizchip_sw_reset()
+void Wiznet5100::wizchip_sw_reset()
 {
     setMR(MR_RST);
     getMR(); // for delay
@@ -190,68 +203,14 @@ void Wiznet5500::wizchip_sw_reset()
     setSHAR(_mac_address);
 }
 
-int8_t Wiznet5500::wizphy_getphylink()
-{
-    int8_t tmp;
-    if(getPHYCFGR() & PHYCFGR_LNK_ON)
-        tmp = PHY_LINK_ON;
-    else
-        tmp = PHY_LINK_OFF;
-    return tmp;
-}
 
-int8_t Wiznet5500::wizphy_getphypmode()
-{
-    int8_t tmp = 0;
-    if(getPHYCFGR() & PHYCFGR_OPMDC_PDOWN)
-        tmp = PHY_POWER_DOWN;
-    else
-        tmp = PHY_POWER_NORM;
-    return tmp;
-}
-
-void Wiznet5500::wizphy_reset()
-{
-    uint8_t tmp = getPHYCFGR();
-    tmp &= PHYCFGR_RST;
-    setPHYCFGR(tmp);
-    tmp = getPHYCFGR();
-    tmp |= ~PHYCFGR_RST;
-    setPHYCFGR(tmp);
-}
-
-int8_t Wiznet5500::wizphy_setphypmode(uint8_t pmode)
-{
-    uint8_t tmp = 0;
-    tmp = getPHYCFGR();
-    if((tmp & PHYCFGR_OPMD)== 0) return -1;
-    tmp &= ~PHYCFGR_OPMDC_ALLA;
-    if( pmode == PHY_POWER_DOWN)
-        tmp |= PHYCFGR_OPMDC_PDOWN;
-    else
-        tmp |= PHYCFGR_OPMDC_ALLA;
-    setPHYCFGR(tmp);
-    wizphy_reset();
-    tmp = getPHYCFGR();
-    if( pmode == PHY_POWER_DOWN)
-    {
-        if(tmp & PHYCFGR_OPMDC_PDOWN) return 0;
-    }
-    else
-    {
-        if(tmp & PHYCFGR_OPMDC_ALLA) return 0;
-    }
-    return -1;
-}
-
-
-Wiznet5500::Wiznet5500(SPIClass& spi, int8_t cs, int8_t intr):
+Wiznet5100::Wiznet5100(SPIClass& spi, int8_t cs, int8_t intr):
 	_spi(spi), _cs(cs)
 {
 	(void)intr;
 }
 
-boolean Wiznet5500::begin(const uint8_t *mac_address)
+boolean Wiznet5100::begin(const uint8_t *mac_address)
 {
     memcpy(_mac_address, mac_address, 6);
 
@@ -267,9 +226,9 @@ boolean Wiznet5500::begin(const uint8_t *mac_address)
 
     wizchip_sw_reset();
 
-    // Use the full 16Kb of RAM for Socket 0
-    setSn_RXBUF_SIZE(16);
-    setSn_TXBUF_SIZE(16);
+    // Set the size of the Rx and Tx buffers
+    wizchip_write(RMSR, RxBufferSize);
+    wizchip_write(TMSR, TxBufferSize);
 
     // Set our local MAC address
     setSHAR(_mac_address);
@@ -286,7 +245,7 @@ boolean Wiznet5500::begin(const uint8_t *mac_address)
     return true;
 }
 
-void Wiznet5500::end()
+void Wiznet5100::end()
 {
     setSn_CR(Sn_CR_CLOSE);
 
@@ -297,7 +256,7 @@ void Wiznet5500::end()
     while(getSn_SR() != SOCK_CLOSED);
 }
 
-uint16_t Wiznet5500::readFrame(uint8_t *buffer, uint16_t bufsize)
+uint16_t Wiznet5100::readFrame(uint8_t *buffer, uint16_t bufsize)
 {
     uint16_t data_len = readFrameSize();
 
@@ -314,7 +273,7 @@ uint16_t Wiznet5500::readFrame(uint8_t *buffer, uint16_t bufsize)
     return readFrameData(buffer, data_len);
 }
 
-uint16_t Wiznet5500::readFrameSize()
+uint16_t Wiznet5100::readFrameSize()
 {
     uint16_t len = getSn_RX_RSR();
 
@@ -334,19 +293,18 @@ uint16_t Wiznet5500::readFrameSize()
     return data_len;
 }
 
-void Wiznet5500::discardFrame(uint16_t framesize)
+void Wiznet5100::discardFrame(uint16_t framesize)
 {
     wizchip_recv_ignore(framesize);
     setSn_CR(Sn_CR_RECV);
 }
 
-uint16_t Wiznet5500::readFrameData(uint8_t *buffer, uint16_t framesize)
+uint16_t Wiznet5100::readFrameData(uint8_t *buffer, uint16_t framesize)
 {
     wizchip_recv_data(buffer, framesize);
     setSn_CR(Sn_CR_RECV);
 
-    // Had problems with W5500 MAC address filtering (the Sn_MR_MFEN option)
-    // Do it in software instead:
+    // W5100 doesn't have any built-in MAC address filtering
     if ((buffer[0] & 0x01) || memcmp(&buffer[0], _mac_address, 6) == 0)
     {
         // Addressed to an Ethernet multicast address or our unicast address
@@ -356,7 +314,7 @@ uint16_t Wiznet5500::readFrameData(uint8_t *buffer, uint16_t framesize)
     }
 }
 
-uint16_t Wiznet5500::sendFrame(const uint8_t *buf, uint16_t len)
+uint16_t Wiznet5100::sendFrame(const uint8_t *buf, uint16_t len)
 {
     // Wait for space in the transmit buffer
     while(1)

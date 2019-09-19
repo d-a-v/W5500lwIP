@@ -49,14 +49,14 @@ public:
     IPAddress    subnetMask () const { return IPAddress(_netif.netmask.u_addr.ip4.addr); }
     IPAddress    gatewayIP  () const { return IPAddress(_netif.gw.u_addr.ip4.addr); }
 #else
-    IPAddress    localIP    () const { return IPAddress(ip4_addr_get_u32(&_netif.ip_addr)); }
-    IPAddress    subnetMask () const { return IPAddress(ip4_addr_get_u32(&_netif.netmask)); }
-    IPAddress    gatewayIP  () const { return IPAddress(ip4_addr_get_u32(&_netif.gw)); }
+    IPAddress    localIP    () const { return IPAddress(ip4_addr_get_u32(ip_2_ip4(&_netif.ip_addr))); }
+    IPAddress    subnetMask () const { return IPAddress(ip4_addr_get_u32(ip_2_ip4(&_netif.netmask))); }
+    IPAddress    gatewayIP  () const { return IPAddress(ip4_addr_get_u32(ip_2_ip4(&_netif.gw))); }
 #endif
 
     void setDefault ();
 
-    bool connected () { return !!ip4_addr_get_u32(&_netif.ip_addr); }
+    bool connected () { return !!ip4_addr_get_u32(ip_2_ip4(&_netif.ip_addr)); }
 
 protected:
 
@@ -85,6 +85,11 @@ boolean LwipEthernet<RawEthernet>::begin (const uint8_t* macAddress, uint16_t mt
         memcpy(_macAddress, macAddress, 6);
     else
     {
+        _netif.num = 2;
+        for (auto n = netif_list; n; n = n->next)
+            if (n->num >= _netif.num)
+                _netif.num = n->num + 1;
+
 #ifdef ESP8266
         // make a new mac-address from the esp's wifi sta one
         // I understand this is cheating with an official mac-address
