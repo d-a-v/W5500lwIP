@@ -30,6 +30,8 @@
  *
  */
 
+// original sources: https://github.com/njh/W5100MacRaw
+
 #ifndef	W5100_H
 #define	W5100_H
 

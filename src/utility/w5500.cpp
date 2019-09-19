@@ -30,6 +30,8 @@
  *
  */
 
+// original sources: https://github.com/njh/W5500MacRaw
+
 #include <SPI.h>
 #include "w5500.h"
 

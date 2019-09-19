@@ -30,6 +30,8 @@
  *
  */
 
+// original sources: https://github.com/njh/W5100MacRaw
+
 #include <SPI.h>
 #include "w5100.h"
 
