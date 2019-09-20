@@ -1,6 +1,6 @@
 
-Ethernet driver for lwIP on esp8266
------------------------------------
+Ethernet drivers for lwIP on esp8266
+------------------------------------
 
 This library brings full ethernet (RJ45 cables) connectivity into an already
 existing lwIP stack, such as the one in esp8266.
@@ -13,11 +13,11 @@ Every network services should work
 * ... your already working network services
 * no need for separate UDP/TCP api (like uIP or others, lwIP is already here)
 
-W5100 and W5500 drivers are slightly modified versions of
+W5100, W5500 and enc28j60 drivers are slightly modified versions of
 
 https://github.com/njh/W5100MacRaw
-
 https://github.com/njh/W5500MacRaw
+https://github.com/njh/EtherSia (enc28j60)
 
 How to use
 ----------
@@ -29,7 +29,6 @@ What's next
 -----------
 * allow dhcp server
 * provide better network helpers (like arduino's `WiFi.status()`)
-* enc28j60 similar driver
 
 Notes (esp8266 and w5500, w5100?)
 ---------------------------------
