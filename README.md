@@ -1,4 +1,12 @@
 
+This repository has been [merged into esp8266/Arduino](https://github.com/esp8266/Arduino/pull/6680) and is now obsolete.
+===================================
+
+You can use the git version of esp8266/Arduino or the [unofficial esp8266/Arduino snapshot release](https://d-a-v.github.io/esp8266/Arduino) regularly or on-request rebuilded.
+
+For reference:
+
+
 Ethernet drivers for lwIP on esp8266
 ------------------------------------
 
